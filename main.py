@@ -18,6 +18,7 @@ except ModuleNotFoundError:
 class SearchThread(threading.Thread):
     def __init__(self, config):
         super().__init__()
+        self.daemon = True
         self.config = config
         self.name = "Game_search"
 
@@ -36,10 +37,17 @@ class SearchThread(threading.Thread):
             else:
                 print(f"Not found on {root_dir[:-1]}. {drives.index(root_dir) + 1}/{len(drives)} disks checked.")
 
+class Convertor(threading.Thread):
+    def __init__(self, game_path: str, color_mode: int = 3, resolution: list = (300, 300), offset: list = (0, 0)):
+        super().__init__()
+        self.game_path: str = game_path
+        self.color_mode: int = color_mode
+        self.resolution: list = resolution
+        self.offset: list = offset
 
 class Main:
     def __init__(self):
-        self.config = configparser.ConfigParser()
+        self.config: configparser.ConfigParser = configparser.ConfigParser()
 
         if os.name != "nt":
             print("The script only works on Windows.")
@@ -47,10 +55,10 @@ class Main:
             exit()
 
         os.system("cls")
-        self.image_path = "image/"
-        self.config_path = "config.ini"
-        self.image_list = []
-        self.mode = 0
+        self.image_path: str = "image/"
+        self.config_path: str = "config.ini"
+        self.image_list: list = []
+        self.mode: int = 0
 
         if not os.path.exists(self.image_path):
             print(f"Folder {self.config_path} not found")
@@ -68,7 +76,7 @@ class Main:
                 self.config.write(configfile)
 
         self.config.read(self.config_path)
-        self.image_update = threading.Thread(name="Image_update", target=self.file_image, daemon=True)
+        self.image_update: threading.Thread = threading.Thread(name="Image_update", target=self.file_image, daemon=True)
 
         input("To start, press Enter...")
         os.system("cls")
@@ -77,50 +85,60 @@ class Main:
         self.select_image()
 
     def file_image(self):
-        image_last = 0
-        image_current = self.image_dir()
+        image_last: list = []
+        image_current: list = self.image_dir()
         while True:
             image_current = self.image_dir()
-            if len(image_current) != image_last:
+            if image_current != image_last:
                 image_last = image_current
                 self.image_list = self.image_dir()
-            time.sleep(2)
+            time.sleep(1)
 
 
     def image_dir(self):
-        extensions = ["png", "jpg", "jpeg"]
+        extensions: list = ["png", "jpg", "jpeg"]
 
-        files = []
+        files: list = []
         for ext in extensions:
             files.extend(glob.glob(os.path.join(self.image_path, f"*.{ext}")))
 
         return files
 
     def show_image_list(self, stop_event: threading.Event):
+        image: list = self.image_list
+        if not len(image):
+            print("There are no images in the 'image/' folder.")
         while True:
-            os.system("cls")
-            print("Select a file:")
-            for i, file in enumerate(self.image_list):
-                print(f"{i} - {file}")
-            print("To select a file, you must specify the image number. \n\n>>>", end="")
+            if image != self.image_list:
+                os.system("cls")
+                print("Select a file:")
+                for i, file in enumerate(self.image_list):
+                    print(f"{i} - {file}")
+                print("To select a file, you must specify the image number. \n\n>>> ", end="")
+                image = self.image_list
 
-            time.sleep(5)
+            time.sleep(1)
 
     def select_image(self):
-        stop_show_image = threading.Event()
+        stop_show_image: threading.Event = threading.Event()
 
-        show_image = threading.Thread(name="Show_image", target=self.show_image_list, daemon=True, args=(stop_show_image,))
+        show_image: threading.Thread = threading.Thread(name="Show_image", target=self.show_image_list, daemon=True, args=(stop_show_image,))
         show_image.start()
 
         while True:
-            file = int(input())
-
             try:
-                if self.image_list[file]:
-                    print("Ok")
-                    break
-            except IndexError:
-                print("Image not found")
+                file: int = int(input())
+
+                try:
+                    if self.image_list[file] and file >= 0:
+                        print(self.image_list[file])
+                        break
+                    else:
+                        raise IndexError
+                except IndexError:
+                    print("Image not found \n>>> ", end="")
+            except ValueError:
+                print("Failed get a number. \n>>> ", end="")
         stop_show_image.set()
 
 
