@@ -19,6 +19,7 @@ class SearchThread(threading.Thread):
     def __init__(self, config):
         super().__init__()
         self.config = config
+        self.name = "Game_search"
 
     def run(self):
         drives = [chr(x) + ":" for x in range(65, 91) if os.path.exists(chr(x) + ":")]
@@ -48,6 +49,8 @@ class Main:
         os.system("cls")
         self.image_path = "image/"
         self.config_path = "config.ini"
+        self.image_list = []
+        self.mode = 0
 
         if not os.path.exists(self.image_path):
             print(f"Folder {self.config_path} not found")
@@ -65,10 +68,24 @@ class Main:
                 self.config.write(configfile)
 
         self.config.read(self.config_path)
+        self.image_update = threading.Thread(name="Image_update", target=self.file_image, daemon=True)
+
         input("To start, press Enter...")
         os.system("cls")
 
-        self.show_image_list()
+        self.image_update.start()
+        self.select_image()
+
+    def file_image(self):
+        image_last = 0
+        image_current = self.image_dir()
+        while True:
+            image_current = self.image_dir()
+            if len(image_current) != image_last:
+                image_last = image_current
+                self.image_list = self.image_dir()
+            time.sleep(2)
+
 
     def image_dir(self):
         extensions = ["png", "jpg", "jpeg"]
@@ -79,31 +96,32 @@ class Main:
 
         return files
 
-    def show_image_list(self):
-        def print_images(stop):
-            while not stop:
-                files = self.image_dir()
-                print(f"Images in {self.image_path}:")
-                for x, file in enumerate(files):
-                    print(f"{x+1} - {file}")
-                print("\n>>>", end="")
+    def show_image_list(self, stop_event: threading.Event):
+        while True:
+            os.system("cls")
+            print("Select a file:")
+            for i, file in enumerate(self.image_list):
+                print(f"{i} - {file}")
+            print("To select a file, you must specify the image number. \n\n>>>", end="")
 
-                time.sleep(3)
-                os.system("cls")
-        self.stop = False
-        thread = threading.Thread(target=print_images, args=(self.stop,))
-        thread.daemon = True
-        thread.start()
+            time.sleep(5)
+
+    def select_image(self):
+        stop_show_image = threading.Event()
+
+        show_image = threading.Thread(name="Show_image", target=self.show_image_list, daemon=True, args=(stop_show_image,))
+        show_image.start()
+
         while True:
             file = int(input())
+
             try:
-                if self.image_dir()[file-1]:
-                    self.stop = True
-                    print("ok")
+                if self.image_list[file]:
+                    print("Ok")
+                    break
             except IndexError:
                 print("Image not found")
-
-
+        stop_show_image.set()
 
 
 
