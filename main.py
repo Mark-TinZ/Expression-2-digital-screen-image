@@ -7,6 +7,7 @@ import os
 
 try:
     from PIL import Image
+    from Convertot import Convert
 except ModuleNotFoundError:
     os.system("cls")
     print("Installing the pip update")
@@ -14,6 +15,8 @@ except ModuleNotFoundError:
     os.system("cls")
     print("Installing Libraries")
     os.system("pip install pillow")
+    input("Restart the program...")
+    exit()
 
 class SearchThread(threading.Thread):
     def __init__(self, config):
@@ -37,13 +40,6 @@ class SearchThread(threading.Thread):
             else:
                 print(f"Not found on {root_dir[:-1]}. {drives.index(root_dir) + 1}/{len(drives)} disks checked.")
 
-class Convertor(threading.Thread):
-    def __init__(self, game_path: str, color_mode: int = 3, resolution: list = (300, 300), offset: list = (0, 0)):
-        super().__init__()
-        self.game_path: str = game_path
-        self.color_mode: int = color_mode
-        self.resolution: list = resolution
-        self.offset: list = offset
 
 class Main:
     def __init__(self):
