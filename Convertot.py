@@ -3,28 +3,81 @@ from PIL import Image
 from pathlib import Path
 from typing import Union
 
+
 class Convert(threading.Thread):
-    def __init__(self, game_path: Union[str, Path], color_mode: int = 3, proportions_image: bool = True, resolution: list = (300, 300), offset: list = (0, 0)):
+    def __init__(self, image_path: Union[str, Path], game_path: Union[str, Path], color_mode: int = 3,
+                 quantize: int = 64, proportions_image: bool = True, resolution: complex = complex(300, 300),
+                 offset: complex = complex(0, 0)):
         super().__init__()
+
+        self.image_path: str = image_path
         self.game_path: str = game_path
         self.color_mode: int = color_mode
         self.proportions_image: bool = proportions_image
-        self.resolution: list = resolution
-        self.offset: list = offset
+        self.resolution: complex = resolution
+        self.offset: complex = offset
+        self.quantize: int = quantize
 
         self.resolution_image: list = []
+        self.image: Image.Image = Image.Image()
 
-    def open_image(self) -> Image.Image:
-        image: Image.open = Image.open(self.game_path)
+        self.open_image()
+        self.size_image(self.resolution)
+
+    def open_image(self):
+        image: Image.open = Image.open(self.image_path)
         self.resolution_image = image.size
-        return image.convert("RGB")
+        self.image = image.convert("RGB")
+        image = image.quantize(colors=self.quantize)  # уменьшаем количество цветов
+        self.image = image
 
-    def save_image(self, image: Image.Image, name_save: str = "image.png"):
-        image.save(name_save)
+    def size_image(self, resolution: complex) -> Image.Image:
+        if self.proportions_image:
+            aspect_ratio: float = self.resolution_image[1] / self.resolution_image[0]
+            width: int = int(resolution.real)
+            new_width: int = width
+            new_height: int = int(new_width * aspect_ratio)
+
+            return self.image.resize((new_width, new_height))
+        else:
+            width: int = int(resolution.real)
+            height: int = int(resolution.imag)
+            return self.image.resize((width, height))
+
+    def arr_colors(self) -> list:
+        colors: list = []
+        height: int = int(self.resolution.real)
+        width: int = int(self.resolution.imag)
+        # обходим все пиксели изображения
+        for y in range(height):
+            for x in range(width):
+                color = self.image.getpixel((x, y))  # получаем цвет текущего пикселя
+                colors.append(color)
+
+        return colors
 
     def convert(self, color_mode: int):
-        pass
+        rgb_colors: list = self.arr_colors()
+        rgb2digi: list = []
+        match color_mode:
+            case 0:
+                for color in rgb_colors:
+                    print(color)
+                    break
+            case 2:
+                pass
+            case 3:
+                pass
+            case 4:
+                pass
+
+    def show_image(self, name_save: str = ""):
+        if name_save:
+            self.image.save(name_save)
+
+        self.image.show()
+
 
 if __name__ == "__main__":
-    conv = Convert("img.png")
-    conv.save_image(conv.open_image(), name_save="test.png")
+    conv = Convert("img.png", "")
+    conv.convert(0)
