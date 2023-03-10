@@ -6,6 +6,7 @@ import math
 import os
 
 try:
+    import numpy as np
     from PIL import Image
     from Convertot import Convert
 except ModuleNotFoundError:

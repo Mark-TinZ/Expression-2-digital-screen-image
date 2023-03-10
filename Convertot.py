@@ -1,4 +1,5 @@
 import threading
+import numpy as np
 from PIL import Image
 from pathlib import Path
 from typing import Union
@@ -23,6 +24,7 @@ class Convert(threading.Thread):
 
         self.open_image()
         self.size_image(self.resolution)
+        self.show_image("quantized_image.png")
 
     def open_image(self):
         image: Image.open = Image.open(self.image_path)
@@ -44,15 +46,10 @@ class Convert(threading.Thread):
             height: int = int(resolution.imag)
             return self.image.resize((width, height))
 
-    def arr_colors(self) -> list:
-        colors: list = []
-        height: int = int(self.resolution.real)
-        width: int = int(self.resolution.imag)
-        # обходим все пиксели изображения
-        for y in range(height):
-            for x in range(width):
-                color = self.image.getpixel((x, y))  # получаем цвет текущего пикселя
-                colors.append(color)
+    def arr_colors(self) -> np.ndarray:
+        colors: np.ndarray = np.array(self.image)
+        colors = colors.flatten()
+        colors = np.concatenate([colors[::3], colors[1::3], colors[2::3]])
 
         return colors
 
@@ -61,9 +58,9 @@ class Convert(threading.Thread):
         rgb2digi: list = []
         match color_mode:
             case 0:
-                for color in rgb_colors:
-                    print(color)
-                    break
+                print(rgb_colors[0])
+                print(rgb_colors[1])
+                print(rgb_colors[2])
             case 2:
                 pass
             case 3:
@@ -71,7 +68,7 @@ class Convert(threading.Thread):
             case 4:
                 pass
 
-    def show_image(self, name_save: str = ""):
+    def show_image(self, name_save: Union[str, Path] = ""):
         if name_save:
             self.image.save(name_save)
 
