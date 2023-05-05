@@ -1,144 +1,225 @@
-import configparser
-import threading
-import time
-import glob
-import math
-import os
+from PyQt5 import QtWidgets, QtCore, QtGui
+from PyQt5.QtCore import pyqtSignal, Qt
+from PyQt5.QtGui import QPixmap, QImage
+from PyQt5.QtWidgets import QDialog, QFileDialog, QDialogButtonBox, QMessageBox
+from UI.mainmenu import Main_Menu
+from UI.dialog_fileopen import Ui_Dialog_FileOpen
+from UI.progressmenu import Ui_ProgressMenu
+import numpy as np
+import cv2
+import sys
 
-try:
-    import numpy as np
-    from PIL import Image
-    from Convertot import Convert
-except ModuleNotFoundError:
-    os.system("cls")
-    print("Installing the pip update")
-    os.system("pip install --upgrade pip")
-    os.system("cls")
-    print("Installing Libraries")
-    os.system("pip install pillow")
-    input("Restart the program...")
-    exit()
+class StartFileOpen(QDialog, Ui_Dialog_FileOpen):
+    succesfully = pyqtSignal(str)
+    def __init__(self, parent=None):
+        super(StartFileOpen, self).__init__(parent)
+        self.setupUi(self)
+        #self.setWindowFlag(Qt.WindowCloseButtonHint, True)
+        self.setWindowFlag(Qt.WindowContextHelpButtonHint, False)
 
-class SearchThread(threading.Thread):
-    def __init__(self, config):
-        super().__init__()
-        self.daemon = True
-        self.config = config
-        self.name = "Game_search"
+        self.Path = ""
 
-    def run(self):
-        drives = [chr(x) + ":" for x in range(65, 91) if os.path.exists(chr(x) + ":")]
-        folder = "GarrysMod"
-        self.config["SETTINGS"] = {"game_path": ""}
-        for root_dir in drives:
-            if self.config["SETTINGS"]["game_path"]:
-                break
-            for dirpath, dirnames, filenames in os.walk(root_dir+"\\"):
-                if folder in dirnames:
-                    print(f"Folder found: {dirpath}\\GarrysMod\\garrysmod\\data\\e2files")
-                    self.config["SETTINGS"]["game_path"] = dirpath + "\\GarrysMod\\garrysmod\\data\\e2files"
-                    break
-            else:
-                print(f"Not found on {root_dir[:-1]}. {drives.index(root_dir) + 1}/{len(drives)} disks checked.")
+        self.toolButton.clicked.connect(self.getFile)
+        self.buttonBox.button(QDialogButtonBox.Open).clicked.connect(self.buttonOpen)
+        self.buttonBox.button(QDialogButtonBox.Close).clicked.connect(self.closeEvent)
+
+        # self.closeEvent = self.closeEvent
+
+    def isImage(self, path):
+        img = cv2.imread(path)
+        if img is not None:
+            return True
+        else:
+            msg = QMessageBox()
+            msg.setWindowTitle("E2img")
+            msg.setText("Error!")
+            msg.setInformativeText("Image file cannot be identified")
+            msg.setStandardButtons(QMessageBox.Ok)
+            msg.setIcon(QMessageBox.Critical)
+            msg.setFixedSize(320, 80)
+            msg.exec_()
+
+    def getFile(self):
+        image_format = ["PNG (*.png)", "JPEG (*.jpeg *.jpg *.jpe)",
+                        "Tagged Image File Format (*.tiff *.tif)", "Windows bitmaps (*.bmp *.dib)",
+                        "Portable image format (*.pbm *.pgm *.ppm)", "WebP (*.webp)", "All (*.*)"]
+        path = QFileDialog.getOpenFileName(self, "E2img - Image Selection", None, ";;".join(image_format))[0]
+        if path:
+            if self.isImage(path):
+                self.Path = path
+                self.lineEdit.setText(path)
+
+    def buttonOpen(self):
+        self.succesfully.emit(self.Path)
+
+    def end(self):
+        pass
+
+    def closeEvent(self, event):
+        QtWidgets.QApplication.quit()
 
 
-class Main:
+class Main(QtWidgets.QMainWindow, Main_Menu):
     def __init__(self):
-        self.config: configparser.ConfigParser = configparser.ConfigParser()
+        super().__init__()
+        self.setupUi(self)
+        self.setWindowFlag(Qt.WindowMaximizeButtonHint, False)
+        self.start_file_open = StartFileOpen(parent=self)
+        self.start_file_open.succesfully.connect(self.checkFile)
+        self.start_file_open.show()
 
-        if os.name != "nt":
-            print("The script only works on Windows.")
-            input("To close, press enter...")
-            exit()
+        self.actionOpen.triggered.connect(self.getFile)
+        self.actionSave_As.triggered.connect(self.saveFile)
+        self.actionQuit.triggered.connect(self.close)
+        self.Slider_Brightness.valueChanged.connect(self.on_brightness_slider_changed)
+        self.Slider_Contrast.valueChanged.connect(self.on_contrast_slider_changed)
+        self.checkBox_Square.stateChanged.connect(self.on_square_checkbox_changed)
 
-        os.system("cls")
-        self.image_path: str = "image/"
-        self.config_path: str = "config.ini"
-        self.image_list: list = []
-        self.mode: int = 0
+        self.Image = cv2.imread
+        self.Brightness = 0
+        self.Contrast = 0
+        self.Square = True
+        self.Render_Image = cv2.imread
 
-        if not os.path.exists(self.image_path):
-            print(f"Folder {self.config_path} not found")
-            print("Folder created.")
-            os.mkdir(self.image_path)
+        self.menubar.setEnabled(False)
+        self.centralwidget.setEnabled(False)
+        self.statusbar.setEnabled(False)
+        # self.closeEvent = self.closeEvent
 
-        if not os.path.exists(self.config_path):
-            print("Could not find config.ini")
-            print("Search for the game folder...")
-            search_thread = SearchThread(self.config)
-            search_thread.start()
-            search_thread.join()
+    def on_brightness_slider_changed(self, value):
+        _translate = QtCore.QCoreApplication.translate
+        #self.Slider_Brightness.setToolTip(_translate("MainWindow", f"Brightness: {value}"))
+        self.statusbar.showMessage(f"Brightness: {value}", 1000)
+        self.Brightness = value
+        self.select_Filter()
 
-            with open(self.config_path, "w") as configfile:
-                self.config.write(configfile)
+    def on_contrast_slider_changed(self, value):
+        _translate = QtCore.QCoreApplication.translate
+        #self.Slider_Contrast.setToolTip(_translate("MainWindow", f"Сontrast: {value}"))
+        self.statusbar.showMessage(f"Сontrast: {value}", 1000)
+        self.Contrast = value
+        self.select_Filter()
 
-        self.config.read(self.config_path)
-        self.image_update: threading.Thread = threading.Thread(name="Image_update", target=self.file_image, daemon=True)
+    def on_square_checkbox_changed(self, state):
+        if self.checkBox_Square.isChecked():
+            self.Square = True
+        else:
+            self.Square = False
 
-        input("To start, press Enter...")
-        os.system("cls")
+        self.select_Filter()
 
-        self.image_update.start()
-        self.select_image()
+    def select_Filter(self):
+        self.Render_Image = self.setBrightness(self.Image, self.Brightness)
+        self.Render_Image = self.setContrast(self.Render_Image, self.Contrast)
+        if self.Square:
+            self.Render_Image = self.make_square(self.Render_Image)
+        self.loadImage()
 
-    def file_image(self):
-        image_last: list = []
-        image_current: list = self.image_dir()
-        while True:
-            image_current = self.image_dir()
-            if image_current != image_last:
-                image_last = image_current
-                self.image_list = self.image_dir()
-            time.sleep(1)
+    def setBrightness(self, image, Brightness):
+        hsv = cv2.cvtColor(image, cv2.COLOR_RGB2HSV)
+        h, s, v = cv2.split(hsv)
+
+        if Brightness > 0:
+            lim = 255 - Brightness
+            v[v > lim] = 255
+            v[v <= lim] += Brightness
+        else:
+            lim = abs(Brightness)
+            v[v < lim] = 0
+            v[v >= lim] -= lim
+
+        final_hsv = cv2.merge((h, s, v))
+        final_img = cv2.cvtColor(final_hsv, cv2.COLOR_HSV2RGB)
+        return final_img
+
+    def setContrast(self, image, Сontrast):
+        alpha = (100 - Сontrast) / 127.0
+        beta = 127.0 * (1 - alpha)
+        adjusted_img = cv2.addWeighted(image, alpha, image, 0, beta)
+        return adjusted_img
+
+    # def setSharpness(self, image, Sharpness):
+    #     pass
 
 
-    def image_dir(self):
-        extensions: list = ["png", "jpg", "jpeg"]
+    def saveFile(self):
+        image_format = ["PNG (*.png)", "JPEG (*.jpeg *.jpg *.jpe)",
+                        "Tagged Image File Format (*.tiff *.tif)", "Windows bitmaps (*.bmp *.dib)",
+                        "Portable image format (*.pbm *.pgm *.ppm)", "WebP (*.webp)", "All (*.*)"]
+        path = QFileDialog.getSaveFileName(self, "E2img - Saving an image", None, ";;".join(image_format))[0]
+        img = cv2.cvtColor(self.Render_Image, cv2.COLOR_RGB2BGR)
+        cv2.imwrite(path, img)
 
-        files: list = []
-        for ext in extensions:
-            files.extend(glob.glob(os.path.join(self.image_path, f"*.{ext}")))
+    def isImage(self, path):
+        img = cv2.imread(path)
+        if img is not None:
+            return True
+        else:
+            msg = QMessageBox()
+            msg.setWindowTitle("E2img")
+            msg.setText("Error!")
+            msg.setInformativeText("Image file cannot be identified")
+            msg.setStandardButtons(QMessageBox.Ok)
+            msg.setIcon(QMessageBox.Critical)
+            msg.setFixedSize(320, 80)
+            msg.exec_()
 
-        return files
+    def getFile(self):
+        image_format = ["PNG (*.png)", "JPEG (*.jpeg *.jpg *.jpe)",
+                        "Tagged Image File Format (*.tiff *.tif)", "Windows bitmaps (*.bmp *.dib)",
+                        "Portable image format (*.pbm *.pgm *.ppm)", "WebP (*.webp)", "All (*.*)"]
+        path = QFileDialog.getOpenFileName(self, "E2img - Image Selection", None, ";;".join(image_format))[0]
+        if path:
+            if self.isImage(path):
+                img = cv2.imread(path)
+                img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+                self.Image = img
+                self.Render_Image = self.make_square(self.Image)
+                self.loadImage()
+                self.select_Filter()
 
-    def show_image_list(self, stop_event: threading.Event):
-        image: list = self.image_list
-        if not len(image):
-            print("There are no images in the 'image/' folder.")
-        while True:
-            if image != self.image_list:
-                os.system("cls")
-                print("Select a file:")
-                for i, file in enumerate(self.image_list):
-                    print(f"{i} - {file}")
-                print("To select a file, you must specify the image number. \n\n>>> ", end="")
-                image = self.image_list
 
-            time.sleep(1)
+    def checkFile(self, path):
+        if path:
+            self.menubar.setEnabled(True)
+            self.centralwidget.setEnabled(True)
+            self.statusbar.setEnabled(True)
+            img = cv2.imread(path)
+            img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+            self.Image = img
+            self.Render_Image = self.make_square(self.Image)
+            self.loadImage()
+        else:
+            self.start_file_open.show()
 
-    def select_image(self):
-        stop_show_image: threading.Event = threading.Event()
+    def make_square(self, image):
+        height, width, channels = image.shape
+        if height == width:
+            return image
+        elif height < width:
+            border_size = (width - height) // 2
+            border = cv2.copyMakeBorder(image, top=border_size, bottom=border_size, left=0, right=0,
+                                        borderType=cv2.BORDER_CONSTANT, value=(0, 0, 0))
+            return border
+        else:
+            border_size = (height - width) // 2
+            border = cv2.copyMakeBorder(image, top=0, bottom=0, left=border_size, right=border_size,
+                                        borderType=cv2.BORDER_CONSTANT, value=(0, 0, 0))
+            return border
 
-        show_image: threading.Thread = threading.Thread(name="Show_image", target=self.show_image_list, daemon=True, args=(stop_show_image,))
-        show_image.start()
+    def loadImage(self):
+        pixmap = QPixmap.fromImage(QImage(self.Render_Image, self.Render_Image.shape[1], self.Render_Image.shape[0], self.Render_Image.shape[1] * 3, QImage.Format_RGB888))
+        scaled_pixmap = pixmap.scaled(self.Label_Image.size(), Qt.KeepAspectRatio)
+        self.Label_Image.setPixmap(scaled_pixmap)
 
-        while True:
-            try:
-                file: int = int(input())
-
-                try:
-                    if self.image_list[file] and file >= 0:
-                        print(self.image_list[file])
-                        break
-                    else:
-                        raise IndexError
-                except IndexError:
-                    print("Image not found \n>>> ", end="")
-            except ValueError:
-                print("Failed get a number. \n>>> ", end="")
-        stop_show_image.set()
-
+class ProgressMenu(QtWidgets.QMainWindow, Ui_ProgressMenu):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setupUi(self)
 
 
 if __name__ == '__main__':
-    main = Main()
+    app = QtWidgets.QApplication(sys.argv)
+    window = Main()
+    window.show()
+    sys.exit(app.exec_())
